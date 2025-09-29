@@ -1,4 +1,6 @@
 Data/
+Data2/
+.DS_Store
 *.csv
 .env
 .pdf_crawler/

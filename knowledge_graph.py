@@ -3,11 +3,12 @@ This script creates a knowledge graph out of the extracted data.
 """
 
 import os
+import asyncio
 from dotenv import load_dotenv
 import pandas as pd
 import json
 from langchain_experimental.graph_transformers import LLMGraphTransformer
-from langchain_community.graphs import Neo4jGraph
+from langchain_neo4j import Neo4jGraph
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.document_loaders import UnstructuredFileLoader
 
@@ -38,12 +39,14 @@ class KnowledgeGraph:
         Args:
             data_dir (str): Directory containing the CSV file with extracted data.
         """
-
-        universities = os.listdir(data_dir)
+        def safe_remove(list_dir):
+            return [f for f in list_dir if not f.startswith('.')]
+        
+        universities = safe_remove(os.listdir(data_dir))
         knowledge_dict = {}
         for university in universities:
             uni_path = os.path.join(data_dir, university)
-            programs = os.listdir(uni_path)
+            programs = safe_remove(os.listdir(uni_path))
             knowledge_dict[university] = {}
             for program in programs:
                 program_path = os.path.join(uni_path, program)
@@ -83,7 +86,7 @@ class KnowledgeGraph:
         """
         allowed_nodes = ["University", "Program", "Course"]
         llm_graph_transformer = LLMGraphTransformer(llm=self.llm, allowed_nodes=allowed_nodes, strict_mode=False)
-        data = llm_graph_transformer.aconvert_to_graph_documents(documents)
+        data = asyncio.run(llm_graph_transformer.aconvert_to_graph_documents(documents))
         self.graph.add_graph_documents(data)
 
     
