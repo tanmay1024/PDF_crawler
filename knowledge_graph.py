@@ -3,18 +3,37 @@ This script creates a knowledge graph out of the extracted data.
 """
 
 import os
+from dotenv import load_dotenv
 import pandas as pd
 import json
+from langchain_experimental.graph_transformers import LLMGraphTransformer
+from langchain_community.graphs import Neo4jGraph
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_community.document_loaders import UnstructuredFileLoader
+
+load_dotenv()
+NEO4J_URL = os.getenv("NEO4J_URI")
+NEO4J_USERNAME = os.getenv("NEO4J_USERNAME")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 class KnowledgeGraph:
-    def __init__(self, data_dir='data', model_name='gemini-2.5-pro'):
+    def __init__(self, data_dir='Data', model_name='gemini-2.5-pro'):
         self.data_dir = data_dir
         self.model_name = model_name
-
+        self.graph = Neo4jGraph(
+            url=NEO4J_URL,
+            username=NEO4J_USERNAME,
+            password=NEO4J_PASSWORD,
+            refresh_schema=False
+        )
+        self.llm = ChatGoogleGenerativeAI(
+            model=self.model_name, google_api_key=GEMINI_API_KEY
+        )
 
     def collect_data_files(self, data_dir):
         """
-        Create a knowledge graph from the data in the specified directory.
+        Create a dictionary that organises data file locations by university and program.
         
         Args:
             data_dir (str): Directory containing the CSV file with extracted data.
@@ -33,15 +52,51 @@ class KnowledgeGraph:
 
         return knowledge_dict
 
-
-    def create_knowledge_graph(knowledge_dict):
+    def create_documents(self, knowledge_dict):
         """
-        Create a knowledge graph from the data in the specified directory and save it to a JSON file.
+        Create langchain_core.documents.Document objects from the knowledge dictionary.
         
         Args:
-            data_dir (str): Directory containing the CSV file with extracted data.
-            output_file (str): Path to the output JSON file.
+            knowledge_dict (dict): Dictionary with structure {university: {program: [file_paths]}}
         """
-        knowledge_graph = collect_data_files(data_dir)
-        with open(output_file, 'w') as f_out:
-            json.dump(knowledge_graph, f_out, indent=4)
+        documents = []
+        for university, programs in knowledge_dict.items():
+            for program, file_paths in programs.items():
+                for file_path in file_paths:
+                    try:
+                        loader = UnstructuredFileLoader(file_path)
+                        loaded_docs = loader.load()                        
+                        for doc in loaded_docs:
+                            doc.metadata['university'] = university
+                            doc.metadata['program'] = program
+                        documents.extend(loaded_docs)
+                    except Exception as e:
+                        print(f"Error loading file {file_path}: {e}")
+        return documents
+
+    def create_knowledge_graph(self, documents):
+        """
+        Create a knowledge graph from a dictionary that has organised data file locations
+        
+        Args:
+            knowledge_dict (dict): Dictionary with structure {university: {program: [file_paths]}}
+        """
+        allowed_nodes = ["University", "Program", "Course"]
+        llm_graph_transformer = LLMGraphTransformer(llm=self.llm, allowed_nodes=allowed_nodes, strict_mode=False)
+        data = llm_graph_transformer.aconvert_to_graph_documents(documents)
+        self.graph.add_graph_documents(data)
+
+    
+    def run(self):
+        knowledge_dict = self.collect_data_files(self.data_dir)
+        print("Collected data files:", json.dumps(knowledge_dict, indent=2))
+        documents = self.create_documents(knowledge_dict)
+        print(f"Created {len(documents)} documents.")
+        self.create_knowledge_graph(documents)
+        print("Knowledge graph creation process finished.")
+
+
+if __name__ == "__main__":
+    kg = KnowledgeGraph(data_dir='Data', model_name='gemini-2.5-flash')
+    kg.run()
+
