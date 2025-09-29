@@ -1,3 +1,4 @@
 Data/
 *.csv
 .env
+.pdf_crawler/
