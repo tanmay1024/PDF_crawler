@@ -4,3 +4,6 @@ Data2/
 *.csv
 .env
 .pdf_crawler/
+*.txt
+*.log
+__pycache__/
