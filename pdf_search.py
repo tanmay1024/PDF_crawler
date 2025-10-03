@@ -1,9 +1,10 @@
+import os
 import pandas as pd
 from tavily import TavilyClient
 import json
 
-TAVILY_API_KEY = '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'
 CSV_FILE = 'University Data - Sheet1.csv'
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 def search_tavily(row):
     client = TavilyClient(TAVILY_API_KEY)
