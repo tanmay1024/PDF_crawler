@@ -97,7 +97,7 @@ async def process_all_rows(data):
 
 
 async def main():
-    data = pd.read_csv(CSV_FILE).head(10)
+    data = pd.read_csv(CSV_FILE)
     results = await process_all_rows(data)
     results_df = pd.concat(results, axis=1).T.reset_index(drop=True)
     results_df.columns = ['Title', 'URL']
